@@ -1,92 +1,120 @@
 <?php
 require 'db.php';
+// Header gelmeden kontrolleri yap
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (!isset($_SESSION['oturum'])) { header("Location: giris.php"); exit; }
 
-if (!isset($_GET['id'])) die("Fiş ID'si yok.");
+// ...
 $fis_id = $_GET['id'];
+$uye_id = $_SESSION['id']; // Oturumdaki üye
 
-// Fişi ve Ürünleri Çek
-$stmt = $db->prepare("SELECT * FROM fisler WHERE id = ?");
-$stmt->execute([$fis_id]);
+// SORGUSUNA "AND kullanici_id = ?" ekliyoruz
+$stmt = $pdo->prepare("SELECT * FROM fisler WHERE id = ? AND kullanici_id = ?");
+$stmt->execute([$fis_id, $uye_id]);
 $fis = $stmt->fetch(PDO::FETCH_ASSOC);
 
-$stmtUrun = $db->prepare("SELECT * FROM urunler WHERE fis_id = ?");
-$stmtUrun->execute([$fis_id]);
-$urunler = $stmtUrun->fetchAll(PDO::FETCH_ASSOC);
+if (!$fis) {
+    // Fiş yoksa VEYA başkasınınsa buraya düşer
+    die("Fiş bulunamadı veya bu fişi görüntüleme yetkiniz yok.");
+}
+// ...
+
+include 'includes/header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <title>Fiş Detayı</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        .receipt-card {
-            background: #fff;
-            border-top: 5px solid #0d6efd; /* Mavi üst çizgi */
-            border-bottom: 5px jagged #ccc; /* Süsleme amacı */
-        }
-    </style>
-</head>
-<body class="bg-light">
+<?php if(isset($_GET['durum']) && $_GET['durum'] == 'urun_silindi'): ?>
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="fa-solid fa-check-circle me-2"></i> Ürün silindi ve fiş toplamı güncellendi!
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
 
-    <?php include 'navbar.php'; ?>
-
-    <div class="container mb-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8 col-lg-6">
-                
-                <a href="fislerim.php" class="btn btn-link text-decoration-none text-muted mb-3">
-                    <i class="fa-solid fa-arrow-left"></i> Listeye Dön
-                </a>
-
-                <div class="card receipt-card shadow rounded-3">
-                    <div class="card-body p-4">
-                        
-                        <div class="text-center border-bottom pb-3 mb-3">
-                            <h3 class="fw-bold text-uppercase"><?php echo $fis['market_adi']; ?></h3>
-                            <p class="text-muted mb-0"><i class="fa-regular fa-clock me-1"></i> <?php echo date("d.m.Y", strtotime($fis['tarih'])); ?></p>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-borderless">
-                                <thead class="text-muted small border-bottom">
-                                    <tr>
-                                        <th>ÜRÜN</th>
-                                        <th>KATEGORİ</th>
-                                        <th class="text-end">FİYAT</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($urunler as $urun): ?>
-                                    <tr>
-                                        <td class="fw-medium"><?php echo $urun['urun_adi']; ?></td>
-                                        <td><span class="badge bg-light text-dark border"><?php echo $urun['kategori']; ?></span></td>
-                                        <td class="text-end"><?php echo number_format($urun['fiyat'], 2, ',', '.'); ?> ₺</td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="border-top pt-3 mt-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="h5 mb-0 text-muted">TOPLAM TUTAR</span>
-                                <span class="h3 mb-0 fw-bold text-primary"><?php echo number_format($fis['toplam_tutar'], 2, ',', '.'); ?> ₺</span>
-                            </div>
-                        </div>
-
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-file-invoice me-2 text-primary"></i> Fiş Detayı</span>
+                <span class="badge bg-primary rounded-pill"><?php echo htmlspecialchars($fis['market_adi']); ?></span>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4 p-3 bg-light rounded mx-1 border">
+                    <div class="col-6">
+                        <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Tarih</small>
+                        <div class="fw-bold fs-5"><?php echo date("d.m.Y", strtotime($fis['tarih'])); ?></div>
                     </div>
-                    <div class="card-footer bg-light text-center small text-muted">
-                        Bu fiş dijital olarak arşivlenmiştir.
+                    <div class="col-6 text-end">
+                        <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Toplam Tutar</small>
+                        <div class="fw-bold fs-4 text-success"><?php echo number_format($fis['toplam_tutar'], 2); ?> ₺</div>
                     </div>
                 </div>
 
+                <h6 class="fw-bold mb-3 px-1">🛒 Ürün Listesi</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light small">
+                            <tr>
+                                <th>Ürün Adı</th>
+                                <th>Kategori</th>
+                                <th class="text-end">Fiyat</th>
+                                <th class="text-center" width="50">Sil</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $urunler = $pdo->prepare("SELECT * FROM fis_urunleri WHERE fis_id = ?");
+                            $urunler->execute([$fis_id]);
+                            foreach ($urunler as $urun): 
+                            ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($urun['urun_adi']); ?></td>
+                                <td><span class="badge bg-secondary bg-opacity-10 text-secondary border"><?php echo htmlspecialchars($urun['kategori']); ?></span></td>
+                                <td class="text-end fw-bold"><?php echo number_format($urun['fiyat'], 2); ?></td>
+                                <td class="text-center">
+                                    <a href="sil.php?tur=urun&id=<?php echo $urun['id']; ?>" 
+                                       onclick="return confirm('Sadece bu ürünü silmek istediğine emin misin? Fiş tutarı düşecek.')" 
+                                       class="btn btn-sm btn-outline-danger border-0">
+                                       <i class="fa-solid fa-trash-can"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white border-top-0 text-center pb-3">
+                 <a href="fislerim.php" class="btn btn-outline-secondary w-100"><i class="fa-solid fa-arrow-left"></i> Listeye Dön</a>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-white fw-bold">Orijinal Fiş Görseli</div>
+            <div class="card-body text-center bg-light">
+                <?php if (!empty($fis['dosya_yolu'])): ?>
+                    <img src="uploads/<?php echo $fis['dosya_yolu']; ?>" class="img-fluid rounded shadow-sm mb-2" style="max-height: 400px; object-fit: contain;">
+                    <a href="uploads/<?php echo $fis['dosya_yolu']; ?>" target="_blank" class="btn btn-primary btn-sm w-100">
+                        <i class="fa-solid fa-magnifying-glass-plus"></i> Resmi Büyüt
+                    </a>
+                <?php else: ?>
+                    <p class="text-muted py-4">Görsel bulunamadı.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="card border-danger border-1 shadow-sm">
+            <div class="card-body">
+                <h6 class="text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation"></i>DİKKAT!</h6>
+                <p class="small text-muted mb-2">Bu fişi tamamen silerseniz geri getiremezsiniz.</p>
+                <a href="sil.php?tur=fis&id=<?php echo $fis_id; ?>" 
+                   onclick="return confirm('Tüm fişi silmek istediğine emin misin?')" 
+                   class="btn btn-danger w-100 btn-sm">
+                   <i class="fa-solid fa-trash"></i> Fişi Tamamen Sil
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include 'includes/footer.php'; ?>
